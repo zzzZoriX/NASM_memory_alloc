@@ -4,6 +4,7 @@
 
 extern void* alloc(size_t);
 extern void* alloc_c(int, size_t);
+extern void* reallocate(void*, size_t);
 extern void release(void*);
 
 int
@@ -14,10 +15,15 @@ main(void){
         return 1;
     }
 
-    strcpy(test, "Hello world!");
+    printf("%p\n", test);
 
-    for(size_t i = 0; i < 12; ++i)
-        printf("%c", test[i]);
+    test = (char*)reallocate(test, sizeof(char));
+    if(!test){
+        printf("error\n");
+        return 1;
+    }
+
+    printf("%p\n", test);
         
     release(test);
 

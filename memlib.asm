@@ -1,5 +1,6 @@
 global alloc
 global alloc_c
+global reallocate
 global release
 
 
@@ -98,18 +99,45 @@ alloc_c:
 
     ret
 
+;---------------------------;
+; rcx - указатель           ;
+; rdx - новый размер памяти ;
+;---------------------------;
 reallocate:
+; выделяю новую облачть памяти
+    push rcx
+    mov rcx, rdx
+    call alloc
+    test rax, rax
+    jz ret_null
+    pop rcx
+
+; размер старого указателя
+    mov rbx, [rcx - 8]
+
+; копируем данные старого указателя
+    push rcx
+    mov rsi, rcx
+    mov rdi, rax
+    mov rcx, rbx
+    rep movsb
+
+; очищаем старый указатель
+    pop rcx
+    call release
+
+    ret
 
 align_by_eight:
     mov rax, rbx
     and rax, 7
-    jz ret_align
+    jz _ret
 
     add rbx, 8
     sub rbx, rax
     ret
 
-ret_align: ret
+_ret: ret
     
 ret_null:
     mov rax, 0
