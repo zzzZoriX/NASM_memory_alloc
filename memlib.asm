@@ -1,4 +1,5 @@
 global alloc
+global alloc_c
 global release
 
 
@@ -32,20 +33,55 @@ alloc:
     add rax, [rel CURRENT_HEAP_SIZE]        ; отступ на свободную память
 
     mov qword [rax], 0              ; свободна ли память ячека
-    mov qword [rax - 8], rbx            ; размер ячейки(включая доп информацию)
+    mov qword [rax + 8], rbx            ; размер ячейки(включая доп информацию)
     
-    sub rax, 16                          ; перемещаем указатель так, чтобы он не указывал на доп информацию
-    sub [rel CURRENT_HEAP_SIZE], rbx
+    add rax, 16                          ; перемещаем указатель так, чтобы он не указывал на доп информацию
+    add [rel CURRENT_HEAP_SIZE], rbx
 
     ret
 
 release:
-    add rcx, 8
+    sub rcx, 8
     
     mov qword [rcx], 1
     mov rbx, [rcx]
-    add [rel CURRENT_HEAP_SIZE], rbx
-    mov qword [rcx + 8], 0
+    sub [rel CURRENT_HEAP_SIZE], rbx
+    mov qword [rcx - 8], 0
+
+    ret
+
+alloc_c:
+; размер ячейки
+    mov rbx, rdx
+    call align_by_eight
+
+; размер всех ячеек
+    mov rax, rbx
+    mul rcx
+    add rax, 16
+
+; проверка на наличие места
+    mov rdx, [rel CURRENT_HEAP_SIZE]
+    add rdx, rax
+    cmp rdx, MAX_HEAP_SIZE
+    ja ret_null
+    
+; главный указатель
+    mov rdx, [rel heap_start]
+    add rdx, [rel CURRENT_HEAP_SIZE] ; перемещаем на первую свободную память
+    
+; устанавливаем значения указателя
+    mov [rdx], rax ; размер всех ячеек, включая мета-данные указателя
+
+    add rdx, 8
+    mov [rdx], rbx ; размер одной ячейки / шаг
+    add rdx, 8
+
+    sub [rel CURRENT_HEAP_SIZE], rax
+
+; возвращаем указатель
+    push rdx
+    pop rax
 
     ret
 
