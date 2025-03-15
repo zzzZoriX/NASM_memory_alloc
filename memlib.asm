@@ -6,14 +6,11 @@ global release
 
 section .rodata
     MAX_HEAP_SIZE equ 1024 * 1024 * 2   ; максимальный размер кучи
+    NO_FREE_MEM equ MAX_HEAP_SIZE + 1
 
 section .data
     CURRENT_HEAP_SIZE: dq 0 ; текущая заполненность кучи
-    heap_start: dq heap                 ; начало кучи
-
-
-section .bss
-    heap: resb MAX_HEAP_SIZE            ; куча
+    heap: times MAX_HEAP_SIZE db 1
 
 
 section .text
@@ -35,8 +32,10 @@ alloc:
     cmp rdx, MAX_HEAP_SIZE
     ja ret_null    
     
-    mov rax, [rel heap_start]                 ; указатель на начало кучи
-    add rax, [rel CURRENT_HEAP_SIZE]        ; отступ на свободную память
+    mov rdx, rbx
+    call find_free_mem
+    cmp rax, [NO_FREE_MEM]
+    je ret_null
 
     mov qword [rax], 0              ; свободна ли память ячека
     mov qword [rax + 8], rbx            ; размер ячейки(включая доп информацию)
@@ -81,7 +80,7 @@ alloc_c:
     ja ret_null
     
 ; главный указатель
-    mov rdx, [rel heap_start]
+    mov rdx, [rel heap]
     add rdx, [rel CURRENT_HEAP_SIZE] ; перемещаем на первую свободную память
     
 ; устанавливаем значения указателя
@@ -104,30 +103,38 @@ alloc_c:
 ; rdx - новый размер памяти ;
 ;---------------------------;
 reallocate:
-; выделяю новую облачть памяти
+; сохраняем данные регистров
     push rcx
-    mov rcx, rdx
-    call alloc
-    test rax, rax
-    jz ret_null
+
+; ищем свободную область памяти
+    mov rbx, rdx
+    call align_by_eight
+    mov rdx, rbx
+    add rdx, 16 
+
+    call find_free_mem
+    cmp rax, [NO_FREE_MEM]
+    je ret_null
+
+; востанавливаем значения   
     pop rcx
 
-; размер старого указателя
-    mov rbx, [rcx - 8]
+; создаем новую ячейку
+    mov rbx, [rel heap]
+    add rbx, rax
+    push rbx
+    pop rax
 
-; копируем данные старого указателя
-    push rcx
-    mov rsi, rcx
-    mov rdi, rax
-    mov rcx, rbx
-    rep movsb
-
-; очищаем старый указатель
-    pop rcx
-    call release
+    mov qword [rax], 1
+    add rax, 8
+    mov qword [rax], rdx
+    add rax, 8
 
     ret
 
+;---------------------------------;
+; rbx - значение для выравнивания ;
+;---------------------------------;
 align_by_eight:
     mov rax, rbx
     and rax, 7
@@ -141,4 +148,34 @@ _ret: ret
     
 ret_null:
     mov rax, 0
+    ret
+
+
+;----------------------------;
+; rdx - запрашиваемая память ;
+; rax - начало блока памяти  ;
+;----------------------------;
+find_free_mem:
+    mov rax, [rel heap] ; ставим на начало кучи
+    mov rbx, rax
+    mov rcx, 0
+
+find:
+    cmp rbx, 1
+    jne not_free
+
+    inc rcx
+    cmp rcx, rdx
+    je _ret
+
+    inc rbx
+    jmp find
+
+not_free:
+    mov rcx, 0
+    add rbx, 1
+    mov rax, rbx
+
+no_free_mem:
+    mov rax, [NO_FREE_MEM]
     ret
